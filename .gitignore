@@ -13,3 +13,7 @@
 .externalNativeBuild
 .cxx
 local.properties
+/.idea/
+app/libs/
+app/src/main/java/com/example/hiltapp/repository/
+app/src/main/java/com/example/hiltapp/room/
