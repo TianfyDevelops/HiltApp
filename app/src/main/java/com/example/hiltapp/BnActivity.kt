@@ -28,14 +28,13 @@ class BnActivity : AppCompatActivity() {
 
     private var currentSelect: Int? = null
 
-    private var clazzs =
-        arrayOf(MainFragment::class.java, SecondFragment::class.java, ThreeFragment::class.java)
+    private var clazzs =arrayOf(MainFragment::class, SecondFragment::class, ThreeFragment::class)
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_bn)
-        FragmentUtil.init(this)
+        FragmentUtil.init(supportFragmentManager)
         val bottomNavigationView = findViewById<BottomNavigationView>(R.id.bottom_navigation_view)
         //1.先设置监听防止设置默认选中item时不走该方法
         bottomNavigationView.setOnNavigationItemSelectedListener {

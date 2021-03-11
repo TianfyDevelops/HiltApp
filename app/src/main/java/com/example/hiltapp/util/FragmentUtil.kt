@@ -2,12 +2,10 @@ package com.example.hiltapp.util
 
 import android.os.Bundle
 import android.util.Log
-import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
-import com.example.hiltapp.MainFragment
+import androidx.fragment.app.FragmentManager
 import com.example.hiltapp.R
-import com.example.hiltapp.SecondFragment
-import com.example.hiltapp.ThreeFragment
+import kotlin.reflect.KClass
 
 /**
  *
@@ -28,11 +26,11 @@ class FragmentUtil {
 
         private var currentShowFragment: Fragment? = null
 
-        private var activity: AppCompatActivity? = null
+        private var fragmentManager: FragmentManager? = null
 
 
-        fun init(activity: AppCompatActivity) {
-            this.activity = activity
+        fun init(activity: FragmentManager) {
+            this.fragmentManager = activity
         }
 
         /**
@@ -41,19 +39,18 @@ class FragmentUtil {
          * @param setSelectItemId 传入选择默认选择tab方法
          */
         fun handleShowHide(savedInstanceState: Bundle?, setSelectItemId: () -> Unit) {
-            if (activity == null) {
+            if (fragmentManager == null) {
                 throw ClassNotFoundException("please call init fun in start")
             }
             if (savedInstanceState != null) {
                 Log.d(this.javaClass.simpleName, "savedInstanceState not null")
-                //TODO:待解决 横竖屏切换时activity会保存多个fragment的实例
-                val fragments = activity!!.supportFragmentManager.fragments
+                val fragments = fragmentManager!!.fragments
                 for (fragment in fragments) {
                     Log.d(this.javaClass.simpleName, fragment::class.qualifiedName!!)
                     //5.判断该fragment是否被添加，如果没有被添加判断是否隐藏，如果没有隐藏，则隐藏
                     //目的是隐藏所有可见的fragment，重新管理显示隐藏状态
                     if (fragment.isAdded) {
-                        activity!!.supportFragmentManager.beginTransaction().hide(fragment).commit()
+                        fragmentManager!!.beginTransaction().hide(fragment).commit()
                     }
                 }
                 //6.获取activity被回收时，自己保存的选中item的id
@@ -74,10 +71,10 @@ class FragmentUtil {
          * @param needShowFragment 需要显示的fragment实例
          */
         fun switchFragment(needShowFragment: Fragment) {
-            if (activity == null) {
+            if (fragmentManager == null) {
                 throw ClassNotFoundException("please call init fun in start")
             }
-            val beginTransaction = activity!!.supportFragmentManager.beginTransaction()
+            val beginTransaction = fragmentManager!!.beginTransaction()
             //判断当前fragment是否为空，如果为空，添加需要显示的fragment并提交事务
             if (currentShowFragment == null) {
                 beginTransaction.add(
@@ -110,10 +107,10 @@ class FragmentUtil {
          * @param clazzs class类型的数组
          * @return 存储fragment实例的HashMap
          */
-        fun getFragmentMaps(clazzs: Array<Class<out Fragment>>): HashMap<String, Fragment> {
+        fun getFragmentMaps(clazzs: Array<KClass<out Fragment>>): HashMap<String, Fragment> {
             var clazzMap: HashMap<String, Fragment> = HashMap()
             clazzs.forEach {
-                clazzMap.put(it.name, getFragmentInstance(it as Class<Fragment>))
+                clazzMap.put(it.qualifiedName!!, getFragmentInstance(it))
             }
             return clazzMap
         }
@@ -121,16 +118,15 @@ class FragmentUtil {
         /**
          * 根据对应的class类型获取对应的fragment实例，并存储在HashMap中
          */
-        private fun getFragmentInstance(clazz: Class<Fragment>): Fragment {
-            if (activity == null) {
+        private fun getFragmentInstance(clazz: KClass<out Fragment>): Fragment {
+            if (fragmentManager == null) {
                 throw ClassNotFoundException("please call init fun in start")
             }
             //根据类的全路径名，获取fragment实例
-            var findMainFragmentByTag =
-                activity!!.supportFragmentManager.findFragmentByTag(clazz::class.qualifiedName)
+            var findMainFragmentByTag =fragmentManager!!.findFragmentByTag(clazz.qualifiedName)
             //如果获取不到，反射类的构造方法，并创建fragment实例
             if (findMainFragmentByTag == null) {
-                val constructor = clazz.getConstructor()
+                val constructor = clazz.java.getConstructor()
                 findMainFragmentByTag = constructor.newInstance() as Fragment
             }
             return findMainFragmentByTag
