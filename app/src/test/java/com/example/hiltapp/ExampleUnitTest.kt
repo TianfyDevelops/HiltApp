@@ -17,19 +17,18 @@ class ExampleUnitTest {
         assertEquals(4, 2 + 2)
     }
 
+    /**
+     * 测试如何获取类的全类名
+     */
     @Test
-    fun testClassName(){
-
-        val clazz=MainFragment::class
-//        getClassName(MainFragment::class.java)
+    fun testClassName() {
+        val clazz = MainFragment::class
         getClassName(clazz)
     }
 
     private fun getClassName(clazz: KClass<out Fragment>) {
         System.out.println(clazz.qualifiedName)
     }
-//    private fun getClassName(clazz: Class<out Fragment>){
-//        System.out.println(clazz::class.java.name)
-//    }
+
 
 }
