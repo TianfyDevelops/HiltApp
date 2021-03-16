@@ -1,7 +1,7 @@
 package com.example.hiltapp
 
 import android.os.Bundle
-import android.util.Log
+import android.view.MenuItem
 import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
 import com.example.hiltapp.util.FragmentUtil
@@ -20,63 +20,64 @@ import com.google.android.material.bottomnavigation.BottomNavigationView
  * @UpdateRemark:   更新说明：
  * @Version:        1.0
  */
-class BnActivity : AppCompatActivity() {
+class BnActivity : AppCompatActivity(), BottomNavigationView.OnNavigationItemSelectedListener {
 
-    private var showFragment: Fragment? = null
+    private var needShowFragment: Fragment? = null
+    private val clazz = arrayOf(
+        MainFragment::class.java.name,
+        SecondFragment::class.java.name,
+        ThreeFragment::class.java.name
+    )
 
-    private var cacheFragments: HashMap<String, Fragment>? = null
-
-    private var currentSelect: Int? = null
-
-    private var clazzs =arrayOf(MainFragment::class, SecondFragment::class, ThreeFragment::class)
+    private var fragmentHashMap: HashMap<String, Fragment>? = null
+    private var fragmentUtil: FragmentUtil? = null
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_bn)
-        FragmentUtil.init(supportFragmentManager)
-        val bottomNavigationView = findViewById<BottomNavigationView>(R.id.bottom_navigation_view)
-        //1.先设置监听防止设置默认选中item时不走该方法
-        bottomNavigationView.setOnNavigationItemSelectedListener {
-            Log.d(this.javaClass.name, "setOnNavigationItemSelectedListener")
-            when (it.itemId) {
-                R.id.main_menu -> {
-                    showFragment = cacheFragments?.get(MainFragment::class.qualifiedName!!)
-                }
-                R.id.second_menu -> {
-                    showFragment = cacheFragments?.get(SecondFragment::class.qualifiedName!!)
-                }
-                R.id.three_menu -> {
-                    showFragment = cacheFragments?.get(ThreeFragment::class.qualifiedName!!)
-                }
-            }
-            //2.记录当前选中的条目id
-            currentSelect = it.itemId
-            //3.切换fragment的方法
-            FragmentUtil.switchFragment(showFragment!!)
-            return@setOnNavigationItemSelectedListener true
-        }
-        //4.判断savedInstanceState是否为空，不为空则取出在Activity被系统回收时，保存的fragment的实例，并保存在自己的HashMap中
-        cacheFragments = FragmentUtil.getFragmentMaps(clazzs)
-        Log.d(this.javaClass.simpleName,cacheFragments.toString())
-        FragmentUtil.handleShowHide(savedInstanceState) {
-            if (savedInstanceState != null) {
-                //6.获取activity被回收时，自己保存的选中item的id
-                val currentSelectItemId = savedInstanceState.getInt("currentItemId")
-                currentSelectItemId?.let {
-                    bottomNavigationView.selectedItemId = it
-                }
-            } else {
-                bottomNavigationView.selectedItemId = R.id.main_menu
-            }
-        }
 
+        initBottomNavigationFragment(savedInstanceState)
+
+    }
+
+    private fun initBottomNavigationFragment(savedInstanceState: Bundle?) {
+        //获取FragmentUtil实例
+        fragmentUtil = FragmentUtil.newInstance(this, R.id.main_menu)
+        //获取缓存Fragment实例的HashMap
+        fragmentHashMap = fragmentUtil!!.getFragmentHashMap(savedInstanceState, clazz)
+        val bottomNavigationView = findViewById<BottomNavigationView>(R.id.bottom_navigation_view)
+        bottomNavigationView.setOnNavigationItemSelectedListener(this)
+        //设置默认选中的条目id
+        fragmentUtil!!.setSelectItemId(savedInstanceState) { itemId: Int ->
+            bottomNavigationView.selectedItemId = itemId
+        }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
-        //9.保存activity被回收时，当前选中的itemid
-        currentSelect?.let { outState.putInt("currentItemId", it) }
+        //保存当前选中的条目id
+        fragmentUtil!!.saveSelectItemId(outState)
+    }
+
+    override fun onNavigationItemSelected(item: MenuItem): Boolean {
+        needShowFragment = when (item.itemId) {
+            R.id.main_menu -> {
+                fragmentHashMap?.get(MainFragment::class.java.name)
+            }
+            R.id.second_menu -> {
+                fragmentHashMap?.get(SecondFragment::class.java.name)
+            }
+            R.id.three_menu -> {
+                fragmentHashMap?.get(ThreeFragment::class.java.name)
+            }
+            else -> {
+                fragmentHashMap?.get(MainFragment::class.java.name)
+            }
+        }
+        //切换到要显示的fragment
+        fragmentUtil!!.switchFragment(item.itemId, R.id.fragment_container_view, needShowFragment)
+        return true
     }
 
 

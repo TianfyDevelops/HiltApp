@@ -1,137 +1,194 @@
 package com.example.hiltapp.util
 
 import android.os.Bundle
-import android.util.Log
+import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentManager
-import com.example.hiltapp.R
-import kotlin.reflect.KClass
+import java.lang.reflect.InvocationTargetException
+import java.util.*
 
 /**
- *
- * @ProjectName:    HiltApp
- * @Package:        com.example.hiltapp.util
- * @ClassName:      FragmentUtil
- * @Description:     java类作用描述
- * @Author:         作者名
- * @CreateDate:     2021/3/9 11:02
- * @UpdateUser:     更新者：
- * @UpdateDate:     2021/3/9 11:02
- * @UpdateRemark:   更新说明：
- * @Version:        1.0
+ * @ProjectName: BottomNavigationViewFragmentJava
+ * @Package: com.example.bottomnavigationviewfragmentjava.util
+ * @ClassName: FragmentUtil
+ * @Description: 用于以show/hide的方式管理首页面bottomNavigation+fragment的切换
+ * 解决了因内存不足，或者屏幕切换，引起的fragment重叠的问题
+ * 屏幕切换时，需要在AndroidManifest.xml中配置android:configChanges="orientation"
+ * @Author: tianfy
+ * @CreateDate: 2021/3/15 20:43
+ * @UpdateUser: 更新者：
+ * @UpdateDate: 2021/3/15 20:43
+ * @UpdateRemark: 更新说明：
+ * @Version: 1.0
  */
-class FragmentUtil {
+class FragmentUtil private constructor(activity: AppCompatActivity, defaultSelectItemId: Int) {
+    private val supportFragmentManager: FragmentManager
 
-    companion object {
+    /**
+     * 当前显示的fragment实例
+     */
+    private var currentShowFragment: Fragment? = null
 
-        private var currentShowFragment: Fragment? = null
+    /**
+     * 默认选中的条目id
+     */
+    private val defaultSelectItemId: Int
 
-        private var fragmentManager: FragmentManager? = null
+    /**
+     * 当前选中的条目id
+     */
+    private var currentSelectItemId = 0
 
-
-        fun init(activity: FragmentManager) {
-            this.fragmentManager = activity
-        }
-
-        /**
-         * 处理Activity因内存不足被回收或者屏幕旋转时Activity重建导致Activity重叠的方法
-         * @param savedInstanceState
-         * @param setSelectItemId 传入选择默认选择tab方法
-         */
-        fun handleShowHide(savedInstanceState: Bundle?, setSelectItemId: () -> Unit) {
-            if (fragmentManager == null) {
-                throw ClassNotFoundException("please call init fun in start")
-            }
-            if (savedInstanceState != null) {
-                Log.d(this.javaClass.simpleName, "savedInstanceState not null")
-                val fragments = fragmentManager!!.fragments
-                for (fragment in fragments) {
-                    Log.d(this.javaClass.simpleName, fragment::class.qualifiedName!!)
-                    //5.判断该fragment是否被添加，如果没有被添加判断是否隐藏，如果没有隐藏，则隐藏
-                    //目的是隐藏所有可见的fragment，重新管理显示隐藏状态
-                    if (fragment.isAdded) {
-                        fragmentManager!!.beginTransaction().hide(fragment).commit()
-                    }
+    /**
+     * 切换到要显示的fragment
+     *
+     * @param itemId                  传入选中的条目id
+     * @param fragmentViewContainerId 装载fragment的容器id
+     * @param needShowFragment        需要显示的fragment实例
+     */
+    fun switchFragment(itemId: Int, fragmentViewContainerId: Int, needShowFragment: Fragment?) {
+        currentSelectItemId = itemId
+        if (currentShowFragment == null) {
+            if (needShowFragment!!.isAdded) {
+                if (needShowFragment.isHidden) {
+                    supportFragmentManager.beginTransaction().show(needShowFragment).commit()
                 }
-                //6.获取activity被回收时，自己保存的选中item的id
-                setSelectItemId.invoke()
             } else {
-                //7.如果是第一次创建，创建出所有的fragment，并添加到自己的hashMap中
-                Log.d(this.javaClass.simpleName, "savedInstanceState is null")
-                //8.设置默认选中的item
-                setSelectItemId.invoke()
+                supportFragmentManager.beginTransaction()
+                    .add(fragmentViewContainerId, needShowFragment, needShowFragment.javaClass.name)
+                    .commit()
             }
-
+        } else {
+            if (needShowFragment!!.isAdded) {
+                if (needShowFragment.isHidden) {
+                    supportFragmentManager.beginTransaction()
+                        .hide(currentShowFragment!!)
+                        .show(needShowFragment)
+                        .commit()
+                }
+            } else {
+                supportFragmentManager.beginTransaction()
+                    .hide(currentShowFragment!!)
+                    .add(fragmentViewContainerId, needShowFragment, needShowFragment.javaClass.name)
+                    .commit()
+            }
         }
+        currentShowFragment = needShowFragment
+    }
 
+    /**
+     * 获取缓存fragment实例的HashMap，在setOnNavigationItemSelectedListener之前调用
+     *
+     *1.先判断savedInstanceState是否为null,如果不为null,从supportFragmentManager根据tag依次取出
+     *已经缓存的fragment实例，如果实例不为null，缓存到HashMap中，如果为null，则创建fragment的实例
+     *并缓存到HashMap中
+     *2.savedInstanceState不为null在内存不足，Activity被系统回收的时候会发生，当Activity因内存不足被系统
+     *回收，会调用Activity的SaveInstanceState方法，保存Fragment的实例和状态
+     *3.在AndroidManifest.xml中配置onConfigChange="orientation"方法，Activity不会重新走生命周期，只会走
+     *onConfigChange方法回调
+     * @param savedInstanceState 保存实例状态的bundle
+     * @param clazzs             要创建fragment实例的class对象的全类名
+     * @return 缓存fragment实例的HashMap
+     */
+    fun getFragmentHashMap(
+        savedInstanceState: Bundle?,
+        clazzs: Array<String>
+    ): HashMap<String, Fragment> {
+        val fragmentHashMap = HashMap<String, Fragment>()
 
-        /**
-         *切换fragment,以show/hide的方式
-         * @param activity activity实例
-         * @param needShowFragment 需要显示的fragment实例
-         */
-        fun switchFragment(needShowFragment: Fragment) {
-            if (fragmentManager == null) {
-                throw ClassNotFoundException("please call init fun in start")
-            }
-            val beginTransaction = fragmentManager!!.beginTransaction()
-            //判断当前fragment是否为空，如果为空，添加需要显示的fragment并提交事务
-            if (currentShowFragment == null) {
-                beginTransaction.add(
-                    R.id.fragment_container_view,
-                    needShowFragment,
-                    needShowFragment::class.qualifiedName!!
-                ).commit()
-            } else {
-                //判断当前需要显示fragment是否已经被添加，如果被添加判断是否隐藏，如果隐藏，让其显示，并隐藏当前显示的fragment,并提交事务
-                if (needShowFragment.isAdded) {
-                    if (needShowFragment.isHidden) {
-                        beginTransaction.show(needShowFragment).hide(currentShowFragment!!).commit()
-                    }
+        if (savedInstanceState != null) {
+            for (clazzName in clazzs) {
+                val fragmentByTag = supportFragmentManager.findFragmentByTag(clazzName)
+                if (fragmentByTag != null) {
+                    fragmentHashMap[clazzName] = fragmentByTag
                 } else {
-                    //如果当前fragment不为null,隐藏当前fragment，并显示需要显示的fragment,并提交事务
-                    beginTransaction.hide(currentShowFragment!!)
-                        .add(
-                            R.id.fragment_container_view,
-                            needShowFragment,
-                            needShowFragment::class.qualifiedName!!
-                        ).commit()
+                    val fragmentInstance = getFragmentInstance(clazzName)
+                    if (fragmentInstance != null) {
+                        fragmentHashMap[clazzName] = fragmentInstance
+                    }
                 }
             }
-            //保存当前显示的fragment
-            currentShowFragment = needShowFragment
+            //让所有fragment重置为hide状态
+            val fragments = supportFragmentManager.fragments
+            if (!fragments.isEmpty()) {
+                for (fragment in fragments) {
+                    supportFragmentManager.beginTransaction().hide(fragment!!).commit()
+                }
+            }
+        } else {
+            //如果savedInstanceState为null说明是首次创建，则依次创建fragment的实例，并保存在HashMap中
+            for (clazzName in clazzs) {
+                val fragmentInstance = getFragmentInstance(clazzName)
+                if (fragmentInstance != null) {
+                    fragmentHashMap[clazzName] = fragmentInstance
+                }
+            }
         }
+        return fragmentHashMap
+    }
 
-        /**
-         * 根据传入的Class数组，获取对应的fragment实例，并保存在HashMap中
-         * @param clazzs class类型的数组
-         * @return 存储fragment实例的HashMap
-         */
-        fun getFragmentMaps(clazzs: Array<KClass<out Fragment>>): HashMap<String, Fragment> {
-            var clazzMap: HashMap<String, Fragment> = HashMap()
-            clazzs.forEach {
-                clazzMap.put(it.qualifiedName!!, getFragmentInstance(it))
-            }
-            return clazzMap
-        }
-
-        /**
-         * 根据对应的class类型获取对应的fragment实例，并存储在HashMap中
-         */
-        private fun getFragmentInstance(clazz: KClass<out Fragment>): Fragment {
-            if (fragmentManager == null) {
-                throw ClassNotFoundException("please call init fun in start")
-            }
-            //根据类的全路径名，获取fragment实例
-            var findMainFragmentByTag =fragmentManager!!.findFragmentByTag(clazz.qualifiedName)
-            //如果获取不到，反射类的构造方法，并创建fragment实例
-            if (findMainFragmentByTag == null) {
-                val constructor = clazz.java.getConstructor()
-                findMainFragmentByTag = constructor.newInstance() as Fragment
-            }
-            return findMainFragmentByTag
+    /**
+     * 设置需要选中的条目id
+     * 在setOnNavigationItemSelectedListener方法之后调用
+     * @param savedInstanceState     保存实例状态的bundle
+     * @param onSelectItemIdListener 选中条目id的监听
+     */
+    fun setSelectItemId(savedInstanceState: Bundle?, onSelectItemIdListener: (Int) -> Unit) {
+        if (savedInstanceState != null) {
+            val currentSelectItemId = savedInstanceState[currentSelectItemIdKey] as Int
+            onSelectItemIdListener.invoke(currentSelectItemId)
+        } else {
+            onSelectItemIdListener.invoke(defaultSelectItemId)
         }
     }
 
+    /**
+     * 保存选中的条目id
+     * 在Activity的onSaveInstanceState方法中调用
+     *
+     * @param outState bundle
+     */
+    fun saveSelectItemId(outState: Bundle) {
+        outState.putInt(currentSelectItemIdKey, currentSelectItemId)
+    }
 
+    /**
+     * 根据全类名获取实例对象
+     *
+     * @param clazzName 全类名
+     * @return fragment实例
+     */
+    private fun getFragmentInstance(clazzName: String): Fragment? {
+        try {
+            val aClass = Class.forName(clazzName)
+            val constructor = aClass.getConstructor()
+            return constructor.newInstance() as Fragment
+        } catch (e: ClassNotFoundException) {
+            e.printStackTrace()
+        } catch (e: NoSuchMethodException) {
+            e.printStackTrace()
+        } catch (e: IllegalAccessException) {
+            e.printStackTrace()
+        } catch (e: InstantiationException) {
+            e.printStackTrace()
+        } catch (e: InvocationTargetException) {
+            e.printStackTrace()
+        }
+        return null
+    }
+
+    companion object {
+        /**
+         * 保存当前选中条目id的key
+         */
+        private const val currentSelectItemIdKey = "currentSelectItemIdKey"
+        fun newInstance(activity: AppCompatActivity, defaultSelectItemId: Int): FragmentUtil {
+            return FragmentUtil(activity, defaultSelectItemId)
+        }
+    }
+
+    init {
+        supportFragmentManager = activity.supportFragmentManager
+        this.defaultSelectItemId = defaultSelectItemId
+    }
 }
